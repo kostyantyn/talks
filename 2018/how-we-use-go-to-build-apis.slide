@@ -5,69 +5,118 @@ Kostiantyn Stepaniuk
 PubNative GmbH
 kostiantyn@pubnative.net
 
-* 1/20 Pick the right language
-.image how-we-use-go-to-build-apis/img/gopher.png 500 _
+* 1/17 About PubNative
+- Adtech company which connects publishers and advertisers through its technology
+- First line of the API code was written in *December* *2013* in *Ruby*
+- In *November* *2014* we migrated to *Go*
+- API and supportive utilities have *200K* lines of *Go* code
+- We process *12M* *req/min*
+- Response time below *100ms*
+- We are connected to *197* partners with who we are doing real-time auction
+- At a peak, we send *12M**197=2.364B* outbound req/min
 
-* 2/20 Use the same structure
+* 2/17 What challenges we have
+- *Competitive*: cost-efficient and high-performing
+- *Resilient*: survives the outage of any used service, DB, queue, cache, etc.
+- *Quick* *TTM*: 1-2 products/year
+- *Productivity*: 3043 PRs closed since 2013 or 2 PRs/day
+- *Efficiency*: product/tech task split 85/15, developing by 4 people (of 14 engineers)
+
+# * x/x Service-oriented architecture
+# .image how-we-use-go-to-build-apis/img/architecture.png 500 _
+
+* 3/17 How we do it
+Make it simple
+Make it boring
+Focus on what matters
+
+* 4/17 Learn techniques
+.image how-we-use-go-to-build-apis/img/science_and_charity.jpg 500 _
+Painted in 1897 by 15-year-old boy
+
+* 5/17 And then improve
+.image how-we-use-go-to-build-apis/img/don-quixote.jpg 500 _
+Painted in 1955 by our 74-year-old boy :)
+
+* 6/17 Use the same structure
 .image how-we-use-go-to-build-apis/img/structure.png 500 _
 
-* 3/20 Simple pattern matching
+* 7/17 Full control over HTTP protocol
     http.HandleFunc("/handle/b", func(http.ResponseWriter, *http.Request) {})
     http.HandleFunc("/handle/a", func(http.ResponseWriter, *http.Request) {})
-- No powerful URL routers like [[https://github.com/gorilla/mux][gorilla/mux]]
-- Don't carry parameters in the path
-- Use a query string or a request payload to accept parameters
 
-* 4/20 No extra frameworks for HTTP protocol
-.code how-we-use-go-to-build-apis/code/no_frameworks_for_http_protocol.go /START OMIT/,/END OMIT/
-- Go provides all the necessary wrappers
-- Extra abstraction adds performance penalty
+    http.HandleFunc("/basic_auth", func(w http.ResponseWriter, r *http.Request) {
+        usr, pwd, _ := r.BasicAuth()
+    	if usr != "user" || pwd != "password" {
+    	    w.Header().Set("WWW-Authenticate", `Basic realm="Application"`)
+    		w.WriteHeader(401)
+        }
+    })
+- No powerful URL routers like [[https://github.com/gorilla/mux][gorilla/mux]] because of performance penalty and decreasing clarity. Go provides all the necessary wrappers
+- Don't carry parameters in the path, use a query string or a request payload
 - We need to know what happens under the hood to optimize
 
-* 5/20 Use explicit types, no interfaces
-.code how-we-use-go-to-build-apis/code/explicit_types.go
+* 8/17 Use explicit types, avoid interfaces
+.code how-we-use-go-to-build-apis/code/explicit_types.go /START OMIT/,/END OMIT/
 - We solve specific problems with concrete tools
 - Clear understanding what is used and how
 - Renaming can be done in one command in your favorite editor
+.code how-we-use-go-to-build-apis/code/explicit_types2.go /START OMIT/,/END OMIT/
+- Got a challenge, try to solve it in the best way possible and then think of generalizing, not another way around
 
-* 6/20 One way of doing things
+* 9/17 One way of doing things
 .code how-we-use-go-to-build-apis/code/one_way_of_doing_things.go
+It also applies how to create pools, integrates 3rd parties or writes tests, etc.
 
-* 7/20 Own pool of workers instead of what libraries provide
+* 10/17 Own pool of workers instead of what libraries provide
 .code how-we-use-go-to-build-apis/code/own_pool_of_workers.go /START OMIT/,/END OMIT/
 - Know how many connections are used
-- Avoid re-establishing connections when sent messages are more than the pool size
 - No hidden bottlenecks, e.g., locks are used to manage the pool
 - Easy to profile the pool
 
-* 8/20 Always use non-blocking sending
+* 11/17 Reserve a worker for a task
+.code how-we-use-go-to-build-apis/code/reserve_worker.go /START OMIT/,/END OMIT/
+
+* 12/17 Prefer non-blocking sending
     select {
-    case ch <- "value":
+    case ch1 <- "value1": // strategy 1
+    case ch2 <- "value2": // strategy 2
     default:
         // take an action
     }
 - No `time.After` to control the pool
 - Use buffered channels for backpressure
 
-* 9/20 Requirements to the pool
+* 13/17 Requirements for the pool
 - Worker must know how to restart itself
 - Fixed size of the pool and adjust per instance type
-- Send profiled metrics to centralized location and keep on the instance
+- Send metrics to centralized location and keep the current state on the instance
 
 What to profile:
 
-- How long does it take to process the job
-- How many workers are used right now
+- How long does it take to process the task
+- How many workers are busy right now
 - What was the maximum number of concurrently occupied workers during lifetime of the process
 
-* 10/20 Check pool availability
+* 14/17 Single buffer
+.play -edit how-we-use-go-to-build-apis/code/single_buffer.go /START OMIT/,/END OMIT/
 
-* 11/20 Double-buffers
+* 15/17 Double buffers
+.play how-we-use-go-to-build-apis/code/double_buffers.go /START OMIT/,/END OMIT/
 
-* 12/20 Testing
+* 16/17 Sometimes we have to write our library
+[[https://github.com/pubnative/mysqldriver-go][pubnative/mysqldriver-go]] GC optimized MySQL driver
+[[https://github.com/pubnative/mysqlproto-go][pubnative/mysqlproto-go]] Heap friendly implementation of the MySQL protocol
+.image how-we-use-go-to-build-apis/img/mysqldriver.png _ 1000
 
-* 13/20 Microservices
+* 17/17 Keep the test code in one function
 
+    func TestMyFunc(t *testing.T) {
+        // 1. setup test
+        // 2. define and execute test cases
+        // 3. cleanup
+    }
 
-
-
+- Keep tests straightforward, reading from top to bottom you should be able to understand how the code performs and what are requirements for it
+- No helpers and abstractions in the test code
+- Define what's required to execute the code you test, nothing more
